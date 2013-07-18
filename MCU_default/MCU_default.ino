@@ -12,8 +12,8 @@
 
 //  what capability are we building?
 //#define MCU_MOTOR
-//#define MCU_BLUE
-#define MCU_LED
+#define MCU_BLUE
+//#define MCU_LED
 
 #define PWM1 9
 #define PWM2 10
