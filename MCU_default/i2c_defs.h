@@ -28,11 +28,37 @@
 #define AUTO_INCREMENT_IDV_GLOB 0b11100000
 
 //  general defines
-#define BRYX_LEDS_EN 0x3c36 //  (RGB LED BRYK has 8 leds connected: 1,2,4,5,10,11,12,13)
+
+//  RGB LED BRYK has 8 leds connected: 
+//  1(G2), 2(B2), 4(R2), 5(W2), 10(W1), 11(B1), 12(G1), 13(R1)
+#define NUM_LEDS 8
+//#define BRYX_LEDS_EN 0x3c36  //  all on
+#define BRYX_LEDS_EN 0x2004  //  blue 2 and red 1 (cop car)
+#define BRYX_LEDS_BLUE2 0x2000  //  blue 2  (cop car)
+#define BRYX_LEDS_RED1 0x0004  //  red 1 (cop car)
+//  list of numeric leds in array for looping
+struct led_state
+{
+  byte number;
+  byte on;
+};
+
+led_state ledConfigNums[NUM_LEDS] = {{1,0},{2,0},{4,0},{5,0},{10,0},{11,0},{12,0},{13,0}};
 
 
+//  ************************************************
+//  >>>>>  All BRYX I2C addresses for polling  <<<<< 
+//  ************************************************
 
+#define NUM_BRYX_I2C 1
 
+struct bryx_dev_data
+{
+  int address;
+  bool isConnected;
+};
+
+bryx_dev_data bryx_dev_list[NUM_BRYX_I2C] = {{ADDR_TI59116_0, 0}};
 
 #endif
 
