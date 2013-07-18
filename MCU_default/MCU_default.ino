@@ -263,26 +263,28 @@ void testDrive()
 //
 void readBlue()
 {
+  byte header_num_bytes;
+  
   //  grab bluetooth data, going through the entire serial buffer until empty...
   if (Serial.available() > 0)
   {
-    byte_read = Serial.read();
+    //  header, number of bytes to expect in this message
+    header_num_bytes = Serial.read();
     
-    if (byte_read != stop_byte)  //  store the byte
+    for (int j = 0; j < header_num_bytes; j++)  //  store the byte
     {
-      read_buffer[num_bytes_read] = byte_read;
+      read_buffer[num_bytes_read] = Serial.read();
       num_bytes_read++;
     }
-    else  //  end of stream, set LED values
+
+    //  for LED control via bluetooth, will really only have two bytes of interest, assume byte 1 is 
+    //  the numerical led value of interest, and byte 2 is the brightness value...
+    for (int i = 0; i < num_bytes_read; i += 2)
     {
-      //  for LED control via bluetooth, will really only have two bytes of interest, assume byte 1 is 
-      //  the numerical led value of interest, and byte 2 is the brightness value...
-      for (int i = 0; i < num_bytes_read; i += 2)
-      {
-        setLEDColor(read_buffer[i], read_buffer[i + 1]);
-      }
-      num_bytes_read = 0;
+      setLEDColor(read_buffer[i], read_buffer[i + 1]);
     }
+    
+    num_bytes_read = 0;
   }
   
 }
