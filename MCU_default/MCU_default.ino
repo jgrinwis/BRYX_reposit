@@ -277,7 +277,10 @@ void readBlue()
     {
       //  for LED control via bluetooth, will really only have two bytes of interest, assume byte 1 is 
       //  the numerical led value of interest, and byte 2 is the brightness value...
-      setLEDColor(read_buffer[0], read_buffer[1]);
+      for (int i = 0; i < num_bytes_read; i += 2)
+      {
+        setLEDColor(read_buffer[i], read_buffer[i + 1]);
+      }
       num_bytes_read = 0;
     }
   }
