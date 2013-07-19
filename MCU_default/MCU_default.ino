@@ -23,7 +23,7 @@ long timeStart = 0;
 byte devScanErr = 0;
 byte byte_read = 0;
 byte num_bytes_read = 0;
-byte read_buffer[64];  //  resize as appropriate for our application
+int read_buffer[8];  //  resize as appropriate for our application
 byte stop_byte = 0xFF;
 
 int doOnce = 0;
@@ -34,7 +34,7 @@ int doOnce = 0;
 void setup()
 {
 
-  Serial.begin(19200);
+  Serial.begin(115200);
   
   Wire.begin();
 
@@ -50,6 +50,40 @@ void setup()
   pinMode(A4, OUTPUT);
   pinMode(A5, OUTPUT);
 #elif defined (MCU_BLUE)
+  //  have to setup led/i2c stuff here as well...
+    //  check for RGB LED bryk
+  delay(10);  //  wait for startup
+  
+  //  print life message
+  Serial.println("Hello!!!!");
+  
+  Wire.beginTransmission(ADDR_TI59116_0);
+  devScanErr = Wire.endTransmission();
+  
+  if ( devScanErr == 0)  //  found the device
+  {
+    Wire.beginTransmission(ADDR_TI59116_0);
+
+    //  start configuring 
+    Wire.write(byte(AUTO_INCREMENT_ALL_REG));  //  tells device to increment register for consectutive writes
+    //  mode 1
+    Wire.write(byte(0));  //  all sub-address responses and OCSCILLATOR set to off
+    //  mode 2
+    Wire.write(byte(0));  //  set dimming on, enable error status flag
+    //  LED brightness, only have 8 LEDs but for ease of auto-increment configure all 16
+    for (unsigned i = 0x0; i < 16; i++)
+      Wire.write(byte(0x0));
+    //  group duty cycle
+    Wire.write(byte(0xff));
+    //  group freq (blinking)
+    Wire.write(byte(0xff));
+    //  LED output state, set to off
+    for (unsigned j = 0; j < 4; j++)
+      Wire.write(byte(0x0));
+    //  remainder need not be initialized at startup
+    
+    Wire.endTransmission();
+  }
   //  bluetooth comm
   //pinMode(PWM1, INPUT);
   //pinMode(PWM2, INPUT);
@@ -217,9 +251,10 @@ void blinkLEDs()
   
   //  copCarLED()
   
-  for (int i = 0; i < NUM_LEDS; i++)
-    fadeLEDs(ledConfigNums[i].number);
+//  for (int i = 0; i < NUM_LEDS; i++)
+//    fadeLEDs(ledConfigNums[i].number);
   
+  setLEDColor(1, 200);
 }
 
 
@@ -264,28 +299,44 @@ void testDrive()
 void readBlue()
 {
   byte header_num_bytes;
+  int led_num, brt_val;
+  
+  //  TEST
+  delay(100);
+  setLEDColor(10, 200);
   
   //  grab bluetooth data, going through the entire serial buffer until empty...
   if (Serial.available() > 0)
   {
-    //  header, number of bytes to expect in this message
-    header_num_bytes = Serial.read();
     
-    for (int j = 0; j < header_num_bytes; j++)  //  store the byte
-    {
-      read_buffer[num_bytes_read] = Serial.read();
-      num_bytes_read++;
-    }
+      setLEDColor(10, 0);
 
+    //  header, number of bytes to expect in this message
+//    header_num_bytes = Serial.parseInt();
+
+    
+    led_num = Serial.parseInt();
+    brt_val = Serial.parseInt();
+
+    Serial.print("Set LED num: ");
+    Serial.print(led_num);
+    Serial.print("to bright value: ");
+    Serial.println(brt_val);
+    
+//    for (int j = 0; j < header_num_bytes; j++)  //  store the byte
+//    {
+//      read_buffer[num_bytes_read] = Serial.parseInt();
+//      num_bytes_read++;
+//    }
+  }
     //  for LED control via bluetooth, will really only have two bytes of interest, assume byte 1 is 
     //  the numerical led value of interest, and byte 2 is the brightness value...
-    for (int i = 0; i < num_bytes_read; i += 2)
-    {
-      setLEDColor(read_buffer[i], read_buffer[i + 1]);
-    }
+//    for (int i = 0; i < num_bytes_read; i += 2)
+//    {
+      setLEDColor(byte(led_num), byte(brt_val));
+//    }
     
-    num_bytes_read = 0;
-  }
+//    num_bytes_read = 0;
   
 }
 
@@ -648,7 +699,6 @@ void setLEDBrightVal(byte led_num, byte brt_val)
   {
     case 1:
       reg_brightness = 0x3;
-      Serial.println("Setting Green 2 brightness");
       break;
     case 2:
       reg_brightness = 0x4;
