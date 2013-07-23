@@ -14,6 +14,13 @@
 //#define MCU_MOTOR
 #define MCU_BLUE
 //#define MCU_LED
+//#define DEBUG
+
+#ifdef MCU_BLUE
+//#define LED_BLUE  //  subdefine
+#define CAR_BLUE  //  subdefine
+#endif
+
 
 #define PWM1 9
 #define PWM2 10
@@ -25,6 +32,9 @@ byte byte_read = 0;
 byte num_bytes_read = 0;
 int read_buffer[8];  //  resize as appropriate for our application
 byte stop_byte = 0xFF;
+byte drv_forward = 0;
+byte drv_reverse = 0;
+byte drv_speed_val;
 
 int doOnce = 0;
 
@@ -49,7 +59,7 @@ void setup()
   //  for drive testing w/MD08a, use the I2C pins as digital outs...
   pinMode(A4, OUTPUT);
   pinMode(A5, OUTPUT);
-#elif defined (MCU_BLUE)
+#elif defined (MCU_BLUE) && defined (LED_BLUE)
   //  have to setup led/i2c stuff here as well...
     //  check for RGB LED bryk
   delay(10);  //  wait for startup
@@ -259,6 +269,113 @@ void blinkLEDs()
 
 
 //  ********************
+//  readBlue
+//
+void readBlue()
+{
+  byte header_num_bytes;
+  int led_num, brt_val;
+  static int car_cont;
+  
+#ifdef LED_BLUE 
+  //  TEST
+  delay(100);
+  setLEDColor(10, 200);
+  
+  //  grab bluetooth data, going through the entire serial buffer until empty...
+  if (Serial.available() > 0)
+  {
+    
+      setLEDColor(10, 0);
+
+    //  header, number of bytes to expect in this message
+//    header_num_bytes = Serial.parseInt();
+
+    
+    led_num = Serial.parseInt();
+    brt_val = Serial.parseInt();
+
+#ifdef DEBUG
+    Serial.print("Set LED num: ");
+    Serial.print(led_num);
+    Serial.print("to bright value: ");
+    Serial.println(brt_val);
+#endif
+
+//    for (int j = 0; j < header_num_bytes; j++)  //  store the byte
+//    {
+//      read_buffer[num_bytes_read] = Serial.parseInt();
+//      num_bytes_read++;
+//    }
+  }
+    //  for LED control via bluetooth, will really only have two bytes of interest, assume byte 1 is 
+    //  the numerical led value of interest, and byte 2 is the brightness value...
+//    for (int i = 0; i < num_bytes_read; i += 2)
+//    {
+      setLEDColor(byte(led_num), byte(brt_val));
+//    }
+    
+//    num_bytes_read = 0;
+#elif defined (CAR_BLUE)
+  if (Serial.available() > 0)
+  {
+    car_cont = Serial.parseInt();
+    
+    if ((car_cont - 100) < 0)  // 000 - 099 == no turn, just speed command 
+    {
+      if (car_cont > 9)
+      {
+        drv_forward = 1;  //  second digit = 1 = forward
+        drv_reverse = 0;
+        drv_speed_val = constrain((car_cont - 10), 0, 10);
+      }
+      else  //  must be reverse
+      {
+        drv_forward = 0;
+        drv_reverse = 1;
+        drv_speed_val = constrain(car_cont, 0, 10);
+      }
+    }
+    else if ((car_cont - 200) < 0)  //  100 - 199 == left turn
+    {
+      if ((car_cont - 100) > 9)
+      {
+        drv_forward = 1;  //  second digit = 1 = forward
+        drv_reverse = 0;
+        drv_speed_val = constrain((car_cont - 110), 0, 10);
+      }
+      else  //  must be reverse
+      {
+        drv_forward = 0;
+        drv_reverse = 1;
+        drv_speed_val = constrain((car_cont - 100), 0, 10);
+      } 
+    }
+    else if ((car_cont - 300) < 0)  //  200 - 299 == right turn
+    {
+      if ((car_cont - 200) > 9)
+      {
+        drv_forward = 1;  //  second digit = 1 = forward
+        drv_reverse = 0;
+        drv_speed_val = constrain((car_cont - 210), 0, 10);
+      }
+      else  //  must be reverse
+      {
+        drv_forward = 0;
+        drv_reverse = 1;
+        drv_speed_val = constrain((car_cont - 200), 0, 10);
+      } 
+    }
+    
+  }
+
+
+#endif
+  
+}
+
+
+//  ********************
 //  testDrive
 //
 void testDrive()
@@ -290,54 +407,6 @@ void testDrive()
 
   delay(1000);
 
-}
-
-
-//  ********************
-//  readBlue
-//
-void readBlue()
-{
-  byte header_num_bytes;
-  int led_num, brt_val;
-  
-  //  TEST
-  delay(100);
-  setLEDColor(10, 200);
-  
-  //  grab bluetooth data, going through the entire serial buffer until empty...
-  if (Serial.available() > 0)
-  {
-    
-      setLEDColor(10, 0);
-
-    //  header, number of bytes to expect in this message
-//    header_num_bytes = Serial.parseInt();
-
-    
-    led_num = Serial.parseInt();
-    brt_val = Serial.parseInt();
-
-    Serial.print("Set LED num: ");
-    Serial.print(led_num);
-    Serial.print("to bright value: ");
-    Serial.println(brt_val);
-    
-//    for (int j = 0; j < header_num_bytes; j++)  //  store the byte
-//    {
-//      read_buffer[num_bytes_read] = Serial.parseInt();
-//      num_bytes_read++;
-//    }
-  }
-    //  for LED control via bluetooth, will really only have two bytes of interest, assume byte 1 is 
-    //  the numerical led value of interest, and byte 2 is the brightness value...
-//    for (int i = 0; i < num_bytes_read; i += 2)
-//    {
-      setLEDColor(byte(led_num), byte(brt_val));
-//    }
-    
-//    num_bytes_read = 0;
-  
 }
 
 
