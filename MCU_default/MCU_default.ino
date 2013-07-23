@@ -35,6 +35,8 @@ byte stop_byte = 0xFF;
 byte drv_forward = 0;
 byte drv_reverse = 0;
 byte drv_speed_val;
+enum TURN_DIRECTION {STRAIGHT, LEFT, RIGHT};
+enum DRIVE_DIRECTION {FORWARD, REVERSE};
 
 int doOnce = 0;
 
@@ -276,6 +278,11 @@ void readBlue()
   byte header_num_bytes;
   int led_num, brt_val;
   static int car_cont;
+  DRIVE_DIRECTION drv_direction;
+  TURN_DIRECTION trn_direction;
+  
+  drv_direction = FORWARD;
+  trn_direction = STRAIGHT;
   
 #ifdef LED_BLUE 
   //  TEST
@@ -325,14 +332,14 @@ void readBlue()
     {
       if (car_cont > 9)
       {
-        drv_forward = 1;  //  second digit = 1 = forward
-        drv_reverse = 0;
+        drv_direction = FORWARD;  //  second digit = 1 = forward
+        trn_direction = STRAIGHT;
         drv_speed_val = constrain((car_cont - 10), 0, 10);
       }
       else  //  must be reverse
       {
-        drv_forward = 0;
-        drv_reverse = 1;
+        drv_direction = REVERSE;
+        trn_direction = STRAIGHT;
         drv_speed_val = constrain(car_cont, 0, 10);
       }
     }
@@ -340,14 +347,14 @@ void readBlue()
     {
       if ((car_cont - 100) > 9)
       {
-        drv_forward = 1;  //  second digit = 1 = forward
-        drv_reverse = 0;
+        drv_direction = FORWARD;  //  second digit = 1 = forward
+        trn_direction = LEFT;
         drv_speed_val = constrain((car_cont - 110), 0, 10);
       }
       else  //  must be reverse
       {
-        drv_forward = 0;
-        drv_reverse = 1;
+        drv_direction = REVERSE;
+        trn_direction = LEFT;
         drv_speed_val = constrain((car_cont - 100), 0, 10);
       } 
     }
@@ -355,20 +362,21 @@ void readBlue()
     {
       if ((car_cont - 200) > 9)
       {
-        drv_forward = 1;  //  second digit = 1 = forward
-        drv_reverse = 0;
+        drv_direction = FORWARD;  //  second digit = 1 = forward
+        trn_direction = RIGHT;
         drv_speed_val = constrain((car_cont - 210), 0, 10);
       }
       else  //  must be reverse
       {
-        drv_forward = 0;
-        drv_reverse = 1;
+        drv_direction = REVERSE;
+        trn_direction = RIGHT;
         drv_speed_val = constrain((car_cont - 200), 0, 10);
       } 
     }
     
   }
-
+  
+  testDrive(drv_direction, trn_direction, drv_speed_val);
 
 #endif
   
@@ -378,14 +386,28 @@ void readBlue()
 //  ********************
 //  testDrive
 //
-void testDrive()
+void testDrive(byte drv_direction, byte trn_direction, byte speed_val)
 {
   //----------
   //  steering
   //  full lock, sense???
   //  MD80 specific
-  digitalWrite(A0, LOW);
-  digitalWrite(A1, HIGH);
+  if (turn_direction == STRAIGHT)
+  {
+    digitalWrite(A0, LOW);
+    digitalWrite(A1, LOW);
+  }
+  else if (turn_direction == LEFT)
+  {
+    digitalWrite(A0, HIGH);
+    digitalWrite(A1, LOW);
+  }
+  else if (turn_direction == RIGHT)
+  {
+    digitalWrite(A0, LOW);
+    digitalWrite(A1, HIGH);
+  }
+
   delay(100);
   analogWrite(PWM1, 200);
   delay(100);
@@ -393,19 +415,27 @@ void testDrive()
   //-------
   //  drive
   //  again, sense w/MD80???
-  digitalWrite(A4, LOW);
-  digitalWrite(A5, HIGH);  
+  if (drv_direction == FORWARD)
+  {
+    digitalWrite(A4, LOW);
+    digitalWrite(A5, HIGH);  
+  }
+  else if (drv_direction == REVERSE)
+  {
+    digitalWrite(A4, HIGH);
+    digitalWrite(A5, LOW);  
+  }
+  
   delay(100);
-  analogWrite(PWM2, 150);
-  delay(500);
+  analogWrite(PWM2, speed_val * 10);  //  speed vals from BTLE are going to be 0-9
 
   //  turn
-  digitalWrite(A0, HIGH);
-  digitalWrite(A1, LOW);
-  delay(100);
-  analogWrite(PWM1, 200);
-
-  delay(1000);
+//  digitalWrite(A0, HIGH);
+//  digitalWrite(A1, LOW);
+//  delay(100);
+//  analogWrite(PWM1, 200);
+//
+//  delay(1000);
 
 }
 
