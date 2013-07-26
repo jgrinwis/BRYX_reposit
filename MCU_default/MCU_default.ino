@@ -314,13 +314,13 @@ void readBlue()
 //      read_buffer[num_bytes_read] = Serial.parseInt();
 //      num_bytes_read++;
 //    }
-  }
     //  for LED control via bluetooth, will really only have two bytes of interest, assume byte 1 is 
     //  the numerical led value of interest, and byte 2 is the brightness value...
 //    for (int i = 0; i < num_bytes_read; i += 2)
 //    {
       setLEDColor(byte(led_num), byte(brt_val));
 //    }
+  }
     
 //    num_bytes_read = 0;
 #elif defined (CAR_BLUE)
@@ -392,17 +392,17 @@ void testDrive(byte drv_direction, byte trn_direction, byte speed_val)
   //  steering
   //  full lock, sense???
   //  MD80 specific
-  if (turn_direction == STRAIGHT)
+  if (trn_direction == STRAIGHT)
   {
     digitalWrite(A0, LOW);
     digitalWrite(A1, LOW);
   }
-  else if (turn_direction == LEFT)
+  else if (trn_direction == LEFT)
   {
     digitalWrite(A0, HIGH);
     digitalWrite(A1, LOW);
   }
-  else if (turn_direction == RIGHT)
+  else if (trn_direction == RIGHT)
   {
     digitalWrite(A0, LOW);
     digitalWrite(A1, HIGH);
