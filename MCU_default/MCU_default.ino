@@ -27,6 +27,8 @@
 
 //  operational vars
 long timeStart = 0;
+long timeNow = 0;
+long timePrev = 0;
 byte devScanErr = 0;
 byte byte_read = 0;
 byte num_bytes_read = 0;
@@ -37,6 +39,8 @@ byte drv_reverse = 0;
 byte drv_speed_val;
 enum TURN_DIRECTION {STRAIGHT, LEFT, RIGHT};
 enum DRIVE_DIRECTION {FORWARD, REVERSE};
+boolean have_leds = false;
+unsigned btle_comms_counter = 0;
 
 int doOnce = 0;
 
@@ -46,22 +50,57 @@ int doOnce = 0;
 void setup()
 {
 
+//  Serial.begin(19200);
   Serial.begin(115200);
-  
+//  Serial.begin(9600);
+  Serial.setTimeout(50);
   Wire.begin();
+  
+  Wire.beginTransmission(ADDR_TI59116_0);
+  devScanErr = Wire.endTransmission();
 
-  //  configure pins here...
-#ifdef MCU_MOTOR  
-  //  motor driver
-  pinMode(PWM1, OUTPUT);
-  pinMode(PWM2, OUTPUT);
-  //  appropriate the ananlog pins for direction bit usage...
-  pinMode(A0, OUTPUT);
-  pinMode(A1, OUTPUT);
-  //  for drive testing w/MD08a, use the I2C pins as digital outs...
-  pinMode(A4, OUTPUT);
-  pinMode(A5, OUTPUT);
-#elif defined (MCU_BLUE) && defined (LED_BLUE)
+  if ( devScanErr == 0)  //  found the device
+  {
+    have_leds = true;
+    
+    Wire.beginTransmission(ADDR_TI59116_0);
+
+    //  start configuring 
+    Wire.write(byte(AUTO_INCREMENT_ALL_REG));  //  tells device to increment register for consectutive writes
+    //  mode 1
+    Wire.write(byte(0));  //  all sub-address responses and OCSCILLATOR set to off
+    //  mode 2
+    Wire.write(byte(0));  //  set dimming on, enable error status flag
+    //  LED brightness, only have 8 LEDs but for ease of auto-increment configure all 16
+    for (unsigned i = 0x0; i < 16; i++)
+      Wire.write(byte(0x0));
+    //  group duty cycle
+    Wire.write(byte(0xff));
+    //  group freq (blinking)
+    Wire.write(byte(0xff));
+    //  LED output state, set to off
+    for (unsigned j = 0; j < 4; j++)
+      Wire.write(byte(0x0));
+    //  remainder need not be initialized at startup
+    
+    Wire.endTransmission();
+  }
+  else  //  no leds, must be motor
+  {
+    have_leds = false;
+    
+    //  configure pins here...
+    //  motor driver
+    pinMode(PWM1, OUTPUT);
+    pinMode(PWM2, OUTPUT);
+    //  appropriate the ananlog pins for direction bit usage...
+    pinMode(A0, OUTPUT);
+    pinMode(A1, OUTPUT);
+    //  for drive testing w/MD08a, use the I2C pins as digital outs...
+    pinMode(A4, OUTPUT);
+    pinMode(A5, OUTPUT);
+  }
+ 
   //  have to setup led/i2c stuff here as well...
     //  check for RGB LED bryk
   delay(10);  //  wait for startup
@@ -69,77 +108,8 @@ void setup()
   //  print life message
   Serial.println("Hello!!!!");
   
-  Wire.beginTransmission(ADDR_TI59116_0);
-  devScanErr = Wire.endTransmission();
-  
-  if ( devScanErr == 0)  //  found the device
-  {
-    Wire.beginTransmission(ADDR_TI59116_0);
-
-    //  start configuring 
-    Wire.write(byte(AUTO_INCREMENT_ALL_REG));  //  tells device to increment register for consectutive writes
-    //  mode 1
-    Wire.write(byte(0));  //  all sub-address responses and OCSCILLATOR set to off
-    //  mode 2
-    Wire.write(byte(0));  //  set dimming on, enable error status flag
-    //  LED brightness, only have 8 LEDs but for ease of auto-increment configure all 16
-    for (unsigned i = 0x0; i < 16; i++)
-      Wire.write(byte(0x0));
-    //  group duty cycle
-    Wire.write(byte(0xff));
-    //  group freq (blinking)
-    Wire.write(byte(0xff));
-    //  LED output state, set to off
-    for (unsigned j = 0; j < 4; j++)
-      Wire.write(byte(0x0));
-    //  remainder need not be initialized at startup
-    
-    Wire.endTransmission();
-  }
-  //  bluetooth comm
-  //pinMode(PWM1, INPUT);
-  //pinMode(PWM2, INPUT);
-  //  <<<<<<<<<<<<<<<<<<<<<
-  //  RGB LED Setup Section
-  //  >>>>>>>>>>>>>>>>>>>>>
-#elif defined (MCU_LED)
-  //  check for RGB LED bryk
-  delay(10);  //  wait for startup
-  
-  Wire.beginTransmission(ADDR_TI59116_0);
-  devScanErr = Wire.endTransmission();
-  
-  if ( devScanErr == 0)  //  found the device
-  {
-    Wire.beginTransmission(ADDR_TI59116_0);
-
-    //  start configuring 
-    Wire.write(byte(AUTO_INCREMENT_ALL_REG));  //  tells device to increment register for consectutive writes
-    //  mode 1
-    Wire.write(byte(0));  //  all sub-address responses and OCSCILLATOR set to off
-    //  mode 2
-    Wire.write(byte(0));  //  set dimming on, enable error status flag
-    //  LED brightness, only have 8 LEDs but for ease of auto-increment configure all 16
-    for (unsigned i = 0x0; i < 16; i++)
-      Wire.write(byte(0x0));
-    //  group duty cycle
-    Wire.write(byte(0xff));
-    //  group freq (blinking)
-    Wire.write(byte(0xff));
-    //  LED output state, set to off
-    for (unsigned j = 0; j < 4; j++)
-      Wire.write(byte(0x0));
-    //  remainder need not be initialized at startup
-    
-    Wire.endTransmission();
-  
-    //  start with power-on self-test...
-//    post();
-  }
-#endif  
-  
   //  grab the current time
-  timeStart = millis();
+  timeStart = timePrev = millis();
 }
 
 
@@ -149,47 +119,59 @@ void setup()
 void loop()
 {
   
- #ifdef MCU_LED  
- //  institute a polling system here; the list of bryx should probably live in a user-loadable file...
-  if ( (millis() - timeStart) >= 1000 )  // 1 sec poll
+  if (readBlue())
   {
-    for (int i = 0; i < NUM_BRYX_I2C; i++)
-    {
-      //  look for new devices here
-      Wire.beginTransmission(bryx_dev_list[i].address);
-      devScanErr = Wire.endTransmission();
-      
-      if (devScanErr == 0);
-      {
-        bryx_dev_list[i].isConnected = 1;
-        
-        Serial.print("Device found at address: ");
-        Serial.println(bryx_dev_list[i].address);
-      }
-    }
-    
-    //  set timeStart to current time
-    timeStart = millis();
+    //  reset btle comms counter
+    btle_comms_counter = 0;
   }
-  
-  //  color check
-  //post();
-  
-  //  *****
-  //  cycle leds...
-  blinkLEDs();
+  else if (have_leds)
+  {
+    btle_comms_counter++;
+    
+    if (btle_comms_counter >= 5000)  //  go into standby if no btle comm after 50 cycles
+    {
+      //  institute a polling system here; the list of bryx should probably live in a user-loadable file...
+//      if ( (millis() - timeStart) >= 1000 )  // 1 sec poll
+//      {
+//        for (int i = 0; i < NUM_BRYX_I2C; i++)
+//        {
+//          //  look for new devices here
+//          Wire.beginTransmission(bryx_dev_list[i].address);
+//          devScanErr = Wire.endTransmission();
+//          
+//          if (devScanErr == 0);
+//          {
+//            bryx_dev_list[i].isConnected = 1;
+//            
+//            Serial.print("Device found at address: ");
+//            Serial.println(bryx_dev_list[i].address);
+//          }
+//        }
+//        
+//        //  set timeStart to current time
+//      }
+      
+      //  color check
+      //post();
+      
+      //  *****
+      //  cycle leds...
+      delay(50);
 
-#elif defined (MCU_MOTOR)  
-  //  *****
-  //  test motor drive PWM...
-  testDrive();
+      //  disable status lighting for demo...
+//      blinkLEDs();
 
-#elif defined (MCU_BLUE)
-  //  *****
-  //  check bluetooth module for data...
-  readBlue();
-
-#endif  
+      timeNow = millis();
+      
+      #ifdef DEBUG
+      if ((timeNow - timePrev) >= 1000)
+      {
+        Serial.println(".");
+        timePrev = timeNow;
+      }
+      #endif
+    }
+  }  
   
 }
 
@@ -259,126 +241,168 @@ void post()
 //
 void blinkLEDs()
 {
+  static unsigned led_counter = 0;
+  static boolean reset_counter       = false;
+  
+  #ifdef DEBUG
+//  Serial.print("led_counter: ");
+//  Serial.println(led_counter);
+//  Serial.print("reset_counter: ");
+//  Serial.println(int(reset_counter));
+  #endif
+  
+  if (reset_counter)
+  {
+    setLEDColor(ledConfigNums[--led_counter].number, 0);
+    
+    if (led_counter == 0)
+      reset_counter = false;
+  }
+  else
+  {
+    setLEDColor(ledConfigNums[led_counter++].number, 25);
+    
+    if (led_counter >= 8)
+      reset_counter = true;
+  }
+  
+  
   //  pick a function here
   
   //  copCarLED()
   
 //  for (int i = 0; i < NUM_LEDS; i++)
 //    fadeLEDs(ledConfigNums[i].number);
-  
-  setLEDColor(1, 200);
+
+//  setLEDColor(1, 200);
 }
 
 
 //  ********************
 //  readBlue
 //
-void readBlue()
+boolean readBlue()
 {
   byte header_num_bytes;
   int led_num, brt_val;
   static int car_cont;
   DRIVE_DIRECTION drv_direction;
   TURN_DIRECTION trn_direction;
+  static int red_val, green_val, blue_val;
   
   drv_direction = FORWARD;
   trn_direction = STRAIGHT;
   
-#ifdef LED_BLUE 
   //  TEST
-  delay(100);
-  setLEDColor(10, 200);
+//  delay(100);
+//  setLEDColor(10, 200);
   
-  //  grab bluetooth data, going through the entire serial buffer until empty...
-  if (Serial.available() > 0)
+  if (have_leds)  //  control the leds
   {
-    
-      setLEDColor(10, 0);
-
-    //  header, number of bytes to expect in this message
-//    header_num_bytes = Serial.parseInt();
-
-    
-    led_num = Serial.parseInt();
-    brt_val = Serial.parseInt();
-
-#ifdef DEBUG
-    Serial.print("Set LED num: ");
-    Serial.print(led_num);
-    Serial.print("to bright value: ");
-    Serial.println(brt_val);
-#endif
-
-//    for (int j = 0; j < header_num_bytes; j++)  //  store the byte
-//    {
-//      read_buffer[num_bytes_read] = Serial.parseInt();
-//      num_bytes_read++;
-//    }
-    //  for LED control via bluetooth, will really only have two bytes of interest, assume byte 1 is 
-    //  the numerical led value of interest, and byte 2 is the brightness value...
-//    for (int i = 0; i < num_bytes_read; i += 2)
-//    {
-      setLEDColor(byte(led_num), byte(brt_val));
-//    }
-  }
-    
-//    num_bytes_read = 0;
-#elif defined (CAR_BLUE)
-  if (Serial.available() > 0)
-  {
-    car_cont = Serial.parseInt();
-    
-    if ((car_cont - 100) < 0)  // 000 - 099 == no turn, just speed command 
+    //  grab bluetooth data, going through the entire serial buffer until empty...
+    if (Serial.available())
     {
-      if (car_cont > 9)
-      {
-        drv_direction = FORWARD;  //  second digit = 1 = forward
-        trn_direction = STRAIGHT;
-        drv_speed_val = constrain((car_cont - 10), 0, 10);
-      }
-      else  //  must be reverse
-      {
-        drv_direction = REVERSE;
-        trn_direction = STRAIGHT;
-        drv_speed_val = constrain(car_cont, 0, 10);
-      }
-    }
-    else if ((car_cont - 200) < 0)  //  100 - 199 == left turn
-    {
-      if ((car_cont - 100) > 9)
-      {
-        drv_direction = FORWARD;  //  second digit = 1 = forward
-        trn_direction = LEFT;
-        drv_speed_val = constrain((car_cont - 110), 0, 10);
-      }
-      else  //  must be reverse
-      {
-        drv_direction = REVERSE;
-        trn_direction = LEFT;
-        drv_speed_val = constrain((car_cont - 100), 0, 10);
-      } 
-    }
-    else if ((car_cont - 300) < 0)  //  200 - 299 == right turn
-    {
-      if ((car_cont - 200) > 9)
-      {
-        drv_direction = FORWARD;  //  second digit = 1 = forward
-        trn_direction = RIGHT;
-        drv_speed_val = constrain((car_cont - 210), 0, 10);
-      }
-      else  //  must be reverse
-      {
-        drv_direction = REVERSE;
-        trn_direction = RIGHT;
-        drv_speed_val = constrain((car_cont - 200), 0, 10);
-      } 
-    }
-    
-  }
+//      delay(50);  // wait for serial to flush
+
+      //  turn on individual leds...
+//      led_num = Serial.parseInt();
+//      brt_val = Serial.parseInt();
+
+//      setLEDColor(byte(led_num), byte(brt_val));
+
+      //  turn on by color...
+     red_val    = Serial.parseInt();
+     green_val  = Serial.parseInt();
+     blue_val   = Serial.parseInt();
+   
+     //  red
+     setLEDColor(4,red_val);
+     setLEDColor(13,red_val);
+     //  green
+     setLEDColor(1,green_val);
+     setLEDColor(12,green_val);
+     //  blue
+     setLEDColor(2,blue_val);
+     setLEDColor(11,blue_val);
+
+  #ifdef DEBUG
+      delay(50);
+      Serial.print("Set LED num: ");
+      Serial.print(led_num, DEC);
+      Serial.print(" to bright value: ");
+      Serial.println(brt_val, DEC);
+      delay(50);
+  #endif
   
-  testDrive(drv_direction, trn_direction, drv_speed_val);
-
-#endif
+      //  try flushing serial buffer
+      Serial.read();      
+      
+//      delay(50);  // wait for serial to flush
+      return(true);
+    }
+    else
+      return(false);
+  }
+  else  //  must be motor control
+  {
+    //    num_bytes_read = 0;
+    if (Serial.available() > 0)
+    {
+      car_cont = Serial.parseInt();
+      
+      if ( 0 <= car_cont < 100 )  // 000 - 099 == no turn, just speed command 
+      {
+        if (car_cont > 9)
+        {
+          drv_direction = FORWARD;  //  second digit = 1 = forward
+          trn_direction = STRAIGHT;
+          drv_speed_val = constrain((car_cont - 10), 0, 10);
+        }
+        else  //  must be reverse
+        {
+          drv_direction = REVERSE;
+          trn_direction = STRAIGHT;
+          drv_speed_val = constrain(car_cont, 0, 10);
+        }
+      }
+      else if ( 100 <= car_cont < 200 )  //  100 - 199 == left turn
+      {
+        if (110 <= car_cont)
+        {
+          drv_direction = FORWARD;  //  second digit = 1 = forward
+          trn_direction = LEFT;
+          drv_speed_val = constrain((car_cont - 110), 0, 10);
+        }
+        else  //  must be reverse
+        {
+          drv_direction = REVERSE;
+          trn_direction = LEFT;
+          drv_speed_val = constrain((car_cont - 100), 0, 10);
+        } 
+      }
+      else if ( 200 <= car_cont < 300 )  //  200 - 299 == right turn
+      {
+        if (210 <= car_cont)
+        {
+          drv_direction = FORWARD;  //  second digit = 1 = forward
+          trn_direction = RIGHT;
+          drv_speed_val = constrain((car_cont - 210), 0, 10);
+        }
+        else  //  must be reverse
+        {
+          drv_direction = REVERSE;
+          trn_direction = RIGHT;
+          drv_speed_val = constrain((car_cont - 200), 0, 10);
+        } 
+      }
+      
+      testDrive(drv_direction, trn_direction, drv_speed_val);
+      return(true);
+    }
+    else
+      return(false);
+    
+  }
   
 }
 
@@ -408,7 +432,7 @@ void testDrive(byte drv_direction, byte trn_direction, byte speed_val)
     digitalWrite(A1, HIGH);
   }
 
-  delay(100);
+//  delay(100);
   analogWrite(PWM1, 200);
   delay(100);
   
@@ -417,16 +441,16 @@ void testDrive(byte drv_direction, byte trn_direction, byte speed_val)
   //  again, sense w/MD80???
   if (drv_direction == FORWARD)
   {
-    digitalWrite(A4, LOW);
-    digitalWrite(A5, HIGH);  
-  }
-  else if (drv_direction == REVERSE)
-  {
     digitalWrite(A4, HIGH);
     digitalWrite(A5, LOW);  
   }
-  
-  delay(100);
+  else if (drv_direction == REVERSE)
+  {
+    digitalWrite(A4, LOW);
+    digitalWrite(A5, HIGH);  
+  }
+
+//  delay(100);
   analogWrite(PWM2, speed_val * 10);  //  speed vals from BTLE are going to be 0-9
 
   //  turn
