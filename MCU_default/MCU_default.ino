@@ -21,7 +21,6 @@
 #define CAR_BLUE  //  subdefine
 #endif
 
-
 #define PWM1 9
 #define PWM2 10
 
@@ -41,6 +40,7 @@ enum TURN_DIRECTION {STRAIGHT, LEFT, RIGHT};
 enum DRIVE_DIRECTION {FORWARD, REVERSE};
 boolean have_leds = false;
 unsigned btle_comms_counter = 0;
+byte localRand = 0;
 
 int doOnce = 0;
 
@@ -62,6 +62,8 @@ void setup()
   if ( devScanErr == 0)  //  found the device
   {
     have_leds = true;
+    pinMode(A0, OUTPUT);
+    digitalWrite(A0, HIGH);
     
     Wire.beginTransmission(ADDR_TI59116_0);
 
@@ -85,7 +87,7 @@ void setup()
     
     Wire.endTransmission();
   }
-  else  //  no leds, must be motor
+  else  //  no leds, must be motor/sound transducer
   {
     have_leds = false;
     
@@ -99,6 +101,8 @@ void setup()
     //  for drive testing w/MD08a, use the I2C pins as digital outs...
     pinMode(A4, OUTPUT);
     pinMode(A5, OUTPUT);
+    
+    digitalWrite(A0, HIGH);
   }
  
   //  have to setup led/i2c stuff here as well...
@@ -131,25 +135,25 @@ void loop()
     if (btle_comms_counter >= 5000)  //  go into standby if no btle comm after 50 cycles
     {
       //  institute a polling system here; the list of bryx should probably live in a user-loadable file...
-//      if ( (millis() - timeStart) >= 1000 )  // 1 sec poll
-//      {
-//        for (int i = 0; i < NUM_BRYX_I2C; i++)
-//        {
-//          //  look for new devices here
-//          Wire.beginTransmission(bryx_dev_list[i].address);
-//          devScanErr = Wire.endTransmission();
-//          
-//          if (devScanErr == 0);
-//          {
-//            bryx_dev_list[i].isConnected = 1;
-//            
-//            Serial.print("Device found at address: ");
-//            Serial.println(bryx_dev_list[i].address);
-//          }
-//        }
-//        
-//        //  set timeStart to current time
-//      }
+      if ( (millis() - timeStart) >= 1000 )  // 1 sec poll
+      {
+        for (int i = 0; i < NUM_BRYX_I2C; i++)
+        {
+          //  look for new devices here
+          Wire.beginTransmission(bryx_dev_list[i].address);
+          devScanErr = Wire.endTransmission();
+          
+          if (devScanErr == 0);
+          {
+            bryx_dev_list[i].isConnected = 1;
+            
+            Serial.print("Device found at address: ");
+            Serial.println(bryx_dev_list[i].address);
+          }
+        }
+        
+        //  set timeStart to current time
+      }
       
       //  color check
       //post();
@@ -157,6 +161,12 @@ void loop()
       //  *****
       //  cycle leds...
       delay(50);
+
+//  TEMP TEST
+//playNotes();
+smellsLikeSchoolSpirit();
+//playScale();
+
 
       //  disable status lighting for demo...
 //      blinkLEDs();
@@ -171,8 +181,71 @@ void loop()
       }
       #endif
     }
-  }  
-  
+  }
+//  else  //  poll for i2c devices
+//  TEST - always poll
+  {
+      if ( (millis() - timePrev) >= 1000 )  // 1 sec poll
+      {
+        //  set timeStart to current time
+        timePrev = millis();
+        Serial.println("Heartbeat");
+        
+//        for (int i = 0; i < NUM_BRYX_I2C; i++)
+        for (int i = 0; i < 127; i++)
+        {
+          Wire.beginTransmission(i);
+          devScanErr = Wire.endTransmission();
+          
+          if (devScanErr == 0)
+          {
+            if (i == ADDR_TI59116_0)
+              have_leds = true;
+            
+            Serial.print("Device found at address: ");
+            Serial.println(i);
+            
+            //  loop-back testing
+            //  write data to found device...
+            Wire.beginTransmission(i);
+            Wire.write(localRand = random(0,255));
+            Serial.print("Value written to device: ");
+            Serial.println(localRand);
+            Wire.endTransmission();
+            
+            //  request some data for checkout...
+            Wire.requestFrom(i, 1);
+            while (Wire.available() == 0)
+            {
+              //  noop, wait till there's something to read.
+              //  obviously if the device is found but non-responsive to request, this loop will
+              //  infinite itself, so consider this TEST code only.
+            }
+             
+            Serial.print("Data response from the device: ");
+            Serial.println(Wire.read());
+          }
+
+        }
+
+//          //  look for new devices here
+//          Wire.beginTransmission(bryx_dev_list[i].address);
+//          devScanErr = Wire.endTransmission();
+//          
+//          if (devScanErr == 0);
+//          {
+//            bryx_dev_list[i].isConnected = 1;
+//            if (i == ADDR_TI59116_0)
+//              have_leds = true;
+//            
+//            Serial.print("Device found at address: ");
+//            Serial.println(bryx_dev_list[i].address);
+//          }
+        
+      }  
+    
+  //  playNotes();
+  }
 }
 
 
@@ -854,4 +927,281 @@ void setLEDBrightVal(byte led_num, byte brt_val)
   Wire.write(brt_val);
   Wire.endTransmission();
 
+}
+
+
+void darkLEDs()
+{
+  for (int i = 0; i < NUM_LEDS; i++)
+    setLEDColor(ledConfigNums[i].number, 0);
+
+}
+
+
+//  ******************
+//  playNotes
+//
+void playNotes()
+{
+    static byte buzzerPin = 9;
+  
+//    //  FUR ELISE
+//    //
+//    noTone(9);
+//    delay(500);
+//      setLEDColor(1, 255);
+//    tone(9,659);
+//    delay(125);
+//    darkLEDs();
+//      setLEDColor(2, 255);
+//    tone(9,622);
+//    delay(125);
+//    darkLEDs();
+//      setLEDColor(1, 255);
+//    tone(9,659);
+//    delay(125);
+//    darkLEDs();
+//      setLEDColor(2, 255);
+//    tone(9,622);
+//    delay(125);
+//    darkLEDs();
+//      setLEDColor(1, 255);
+//    tone(9,659);
+//    delay(125);
+//    darkLEDs();
+//      setLEDColor(10, 255);
+//    tone(9,494);
+//    delay(125);
+//    darkLEDs();
+//      setLEDColor(13, 255);
+//    tone(9,587);
+//    delay(125);
+//    darkLEDs();
+//      setLEDColor(11, 255);
+//    tone(9,523);
+//    delay(125);
+//    darkLEDs();
+//     setLEDColor(12, 255);
+//    tone(9,440);
+//    delay(500);
+//
+//    darkLEDs();
+
+    
+//  RANDOM
+//
+    tone(9, random(200, 1250));
+    setLEDColor(random(10,13),255);
+    delay(random(1,75));
+    darkLEDs();
+
+//    //  WARNING SIREN
+//    //
+//    for (int i = 800; i < 1000; i++)
+//    {
+//      tone(9, i);
+//      delay(5);
+//    }
+//    delay(500);
+   
+//COP CAR
+
+//    for (int i = 900; i < 1000; i++)
+//    {
+//      setLEDColor(2, 255);
+//      tone(9, i);
+//      delay(5);
+//    }
+//    
+//    darkLEDs();
+//    
+//    for (int j = 750; j > 650; j--)
+//    {
+//      setLEDColor(13, 255);
+//      tone(9, j);
+//      delay(5);
+//    }
+//
+//    darkLEDs();
+
+////DRILL
+////
+//    tone(buzzerPin,2200); // then buzz by going high
+//    tone(buzzerPin,1000);
+//    tone(buzzerPin,500);
+//    tone(buzzerPin,200);
+//    tone(buzzerPin,500);
+//    delayMicroseconds(10000);    // waiting
+//    noTone(buzzerPin);  // going low
+//    delayMicroseconds(10000);    // and waiting more
+//    tone(buzzerPin,2200); 
+//    tone(buzzerPin,1000);
+//    delayMicroseconds(10000);    // waiting
+//    noTone(buzzerPin);  // going low
+//    delayMicroseconds(10000);    // and waiting more
+//    tone(buzzerPin,100); 
+//    delayMicroseconds(10000);    // waiting
+//    noTone(buzzerPin);  // going low
+//    delayMicroseconds(10000);    // and waiting more
+//    tone(buzzerPin,100); 
+//    delayMicroseconds(10000);    // waiting
+//    noTone(buzzerPin);  // going low
+//    delayMicroseconds(10000);    // and waiting more
+//    noTone(9);
+  
+  
+//  play CETK welcome...
+//
+//  tone(9, NOTECHART::G4);  //  Middle G (orange)
+//  setLEDColor(4, 255);
+//  setLEDColor(13, 255);
+//  setLEDColor(1, 150);  
+//  setLEDColor(12, 150);
+//  delay(750);
+//  darkLEDs();
+//  tone(9, NOTECHART::A4);  //  Middle A (yellow)
+//  setLEDColor(4, 255);
+//  setLEDColor(13, 255);
+//  setLEDColor(1, 255);
+//  setLEDColor(12, 255);
+//  delay(750);
+//  darkLEDs();
+//  tone(9, NOTECHART::F4);  //  Middle F (red)
+//  setLEDColor(4, 255);
+//  setLEDColor(13, 255);
+//  delay(750);
+//  darkLEDs();
+//  tone(9, NOTECHART::F3);  //  F, down an octave (green/chartreuse)
+//  setLEDColor(4, 150);
+//  setLEDColor(13, 150);
+//  setLEDColor(1, 255);
+//  setLEDColor(12, 255);
+//  delay(750);
+//  darkLEDs();
+//  tone(9, NOTECHART::C4);  //  Middle C (white)
+//  setLEDColor(4, 255);
+//  setLEDColor(13, 255);
+//  setLEDColor(1, 255);
+//  setLEDColor(12, 255);
+//  setLEDColor(2, 255);
+//  setLEDColor(11, 255);
+//  delay(750);
+//
+//  noTone(9);  
+//  darkLEDs();
+//  delay(500);  
+}
+
+
+void smellsLikeSchoolSpirit()
+{
+  setLEDColor(1,255);
+  setLEDColor(4,255);
+  setLEDColor(11,255);
+  tone(9, NOTECHART::C5);  //  hail
+  delay(1000);
+//  darkLEDs();
+  setLEDColor(1,100);
+  setLEDColor(4,100);
+  setLEDColor(11,100);
+  tone(9, NOTECHART::A4);  //  to
+  delay(500);
+  tone(9, NOTECHART::B4);  //  the
+  delay(500);
+  tone(9, NOTECHART::C5);  //  vic-
+  delay(500);
+  tone(9, NOTECHART::A4);  //  tors
+  delay(500);
+  tone(9, NOTECHART::B4);  //  val-
+  delay(500);
+  tone(9, NOTECHART::C5);  //  iant
+  delay(500);
+  tone(9, NOTECHART::D5);  //  hail
+  setLEDColor(1,255);
+  setLEDColor(4,255);
+  setLEDColor(11,255);
+  delay(1000);
+  setLEDColor(1,100);
+  setLEDColor(4,100);
+  setLEDColor(11,100);
+  tone(9, NOTECHART::B4);  //  to
+  delay(500);
+  tone(9, NOTECHART::C5);  //  the
+  delay(500);
+  tone(9, NOTECHART::D5);  //  con-
+  delay(500);
+  tone(9, NOTECHART::B4);  //  q'ring
+  delay(500);
+  tone(9, NOTECHART::C5);  //  he-
+  delay(500);
+  tone(9, NOTECHART::D5);  //  roes
+  delay(500);
+  tone(9, NOTECHART::E5);  //  hail
+  setLEDColor(1,255);
+  setLEDColor(4,255);
+  setLEDColor(11,255);
+  delay(500);
+  setLEDColor(1,100);
+  setLEDColor(4,100);
+  setLEDColor(11,100);
+  delay(500);
+  tone(9, NOTECHART::F5);  //  hail
+  setLEDColor(1,255);
+  setLEDColor(4,255);
+  setLEDColor(11,255);
+  delay(750);
+  setLEDColor(1,100);
+  setLEDColor(4,100);
+  setLEDColor(11,100);
+  tone(9, NOTECHART::C5);  //  to
+  delay(105);
+  tone(9, NOTECHART::C5);  //  mich-
+  delay(500);
+  tone(9, NOTECHART::D5);  //  i-
+  delay(500);
+  tone(9, NOTECHART::A4);  //  gan
+  delay(500);
+  tone(9, NOTECHART::B4);  //  the
+  delay(500);
+  tone(9, NOTECHART::C5);  //  lead-
+  delay(1000);
+  tone(9, NOTECHART::B4);  //  ers
+  delay(500);
+  tone(9, NOTECHART::A4);  //  and
+  delay(500);
+  tone(9, NOTECHART::E5);  //  best
+  delay(1125);
+  
+  noTone(9);
+  
+  delay(1000);
+
+  darkLEDs();
+}
+
+
+void playScale()
+{
+  tone(9, NOTECHART::E4);  //  Middle G (orange)
+  delay(1000);
+  tone(9, NOTECHART::F4);  //  Middle G (orange)
+  delay(1000);
+  tone(9, NOTECHART::G4);  //  Middle G (orange)
+  delay(1000);
+  tone(9, NOTECHART::A4);  //  Middle G (orange)
+  delay(1000);
+  tone(9, NOTECHART::B4);  //  Middle G (orange)
+  delay(1000);
+  tone(9, NOTECHART::C4);  //  Middle G (orange)
+  delay(1000);
+  tone(9, NOTECHART::D4);  //  Middle G (orange)
+  delay(1000);
+  tone(9, NOTECHART::E4);  //  Middle G (orange)
+  delay(1000);
+  tone(9, NOTECHART::F4);  //  Middle G (orange)
+  delay(1000);
+  noTone(9);
+  
+  delay (2000);
+  
 }
